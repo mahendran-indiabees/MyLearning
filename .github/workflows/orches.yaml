@@ -1,0 +1,32 @@
+name: Orchestrator for Migration
+
+on:
+  workflow_dispatch:  # Triggered manually
+
+jobs:
+  orchestrator:
+    runs-on: self-hosted  # Using your self-hosted runner
+    strategy:
+      matrix:
+        batch: [1, 2, 3, 4, 5]  # Five batches to start with
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Trigger Child Jobs in Parallel
+        run: |
+          # Define repositories (Example, you can modify this part dynamically)
+          repos=("repo1" "repo2" "repo3" "repo4" "repo5" "repo6" "repo7" "repo8" "repo9" "repo10")
+          
+          batch_start_index=$(( (matrix.batch - 1) * 5 ))  # Calculate start index for the batch
+          batch_end_index=$(( batch_start_index + 4 ))      # Calculate end index for the batch
+          batch_repos=${repos[@]:$batch_start_index:5}      # Slice the repos for this batch
+
+          # Trigger the child pipeline for each repo in parallel
+          for repo in "${batch_repos[@]}"; do
+            echo "Triggering child job for ${repo}"
+            # Trigger child job using GitHub Actions workflow_dispatch with input repo name
+            curl -X POST https://api.github.com/repos/{owner}/{repo}/actions/workflows/child.yml/dispatches \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -d "{\"ref\":\"main\", \"inputs\": {\"RepoName\": \"${repo}\"}}"
+          done
