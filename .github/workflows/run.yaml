@@ -1,0 +1,37 @@
+name: Migration Job
+
+on:
+  workflow_dispatch:
+    inputs:
+      RepoName:
+        description: 'Repository Name'
+        required: true
+        type: string
+
+jobs:
+  migrate:
+    runs-on: self-hosted  # Same runner as master pipeline, handling 5 jobs in parallel
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Run Migration for Repo
+        run: |
+          echo "Starting migration for repository ${{ github.event.inputs.RepoName }}"
+
+          # Example: Migration script or logic
+          repo_name="${{ github.event.inputs.RepoName }}"
+          result="SUCCESS"  # Example result, replace with actual logic
+
+          # Output the result to the master job
+          echo "::set-output name=result::$result"
+          
+          echo "Migration for ${repo_name} completed with status: $result"
+          
+          # You can store results or return them as needed
+          echo "${repo_name} - ${result}" >> results.txt
+
+      - name: Return Results
+        run: |
+          echo "Child Job completed"
+          # Return status or results to master job
