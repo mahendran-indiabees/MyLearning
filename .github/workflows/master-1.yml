@@ -1,0 +1,39 @@
+name: Master Workflow (Orchestration)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  orchestration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Read repos from repo_migration.txt
+        id: read_repos
+        run: |
+          echo "Reading repository list..."
+          REPOS=$(cat repo_migration.txt | xargs)
+          echo "REPO_LIST=$REPOS" >> $GITHUB_ENV
+
+      - name: Trigger Child Workflows in Parallel
+        id: trigger_workflows
+        env:
+          REPO_LIST: ${{ env.REPO_LIST }}
+        run: |
+          python3 trigger_workflows.py
+      - name: Print Summary
+        id: print_summary
+        run: |
+          echo "Summary of Repo Migration:"
+          cat migration_results.txt
+
+      - name: Upload Migration Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: migration_results
+          path: migration_results.txt
+
+  cleanup:
+    runs-on: ubuntu-latest
