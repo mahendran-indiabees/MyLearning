@@ -1,0 +1,43 @@
+name: Master Workflow (Orchestration)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  orchestration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Read repos from repo_migration.txt
+        id: read_repos
+        run: |
+          REPOS=$(cat repo_migration.txt)
+          echo "repos=${REPOS}" >> $GITHUB_ENV
+
+      - name: Trigger Child Workflows in Parallel
+        run: |
+          IFS=' ' read -r -a REPOS <<< "${{ env.repos }}"
+          NUM_REPOS=${#REPOS[@]}
+          CONCURRENCY_LIMIT=15
+          ACTIVE_JOBS=0
+
+          for REPO_NAME in "${REPOS[@]}"; do
+            echo "Triggering migration for repo: $REPO_NAME"
+            # Trigger Child Workflow via API with repo name
+            curl -X POST https://api.github.com/repos/${{ github.repository }}/actions/workflows/child-workflow.yml/dispatches \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -d '{"ref":"main", "inputs": {"repo_name": "'"$REPO_NAME"'"}}' &
+
+            ((ACTIVE_JOBS++))
+
+            if (( ACTIVE_JOBS >= CONCURRENCY_LIMIT )); then
+              echo "Waiting for a child workflow to complete before triggering the next one."
+              wait -n
+              ((ACTIVE_JOBS--))
+            fi
+          done
+
+          # Wait for any remaining jobs to finish
+          wait
