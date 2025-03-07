@@ -1,0 +1,62 @@
+name: Remove Branch Protections
+on:
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: "Comma-separated list of repos (org/repo)"
+        required: true
+      dry-run:
+        description: "Preview without making changes"
+        default: "true"
+        type: boolean
+
+jobs:
+  remove-protections:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup GitHub CLI
+      run: gh auth login --with-token <<< "${{ secrets.GH_PAT }}"
+
+    - name: Process repositories
+      env:
+        DRY_RUN: ${{ github.event.inputs.dry-run }}
+      run: |
+        IFS=',' read -ra REPOS <<< "${{ github.event.inputs.repos }}"
+        for repo in "${REPOS[@]}"; do
+          echo "Processing $repo"
+
+          # GraphQL query to get protected branches/rules
+          QUERY=$(cat <<EOF
+          {
+            repository(owner: "${repo%/*}", name: "${repo#*/}") {
+              branchProtectionRules(first: 20) {
+                nodes {
+                  pattern
+                }
+              }
+            }
+          }
+          EOF
+          )
+
+          # Get protected branch patterns using GraphQL
+          PROTECTED_BRANCHES=$(gh api graphql -f query="$QUERY" \
+            -q '.data.repository.branchProtectionRules.nodes[].pattern')
+
+          echo "Protected branches/patterns:"
+          echo "$PROTECTED_BRANCHES"
+
+          # Remove protections for each pattern
+          for pattern in $PROTECTED_BRANCHES; do
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "[Dry Run] Would remove protection from $repo - pattern: $pattern"
+            else
+              echo "Removing protection from $repo - pattern: $pattern"
+              gh api --method DELETE "/repos/$repo/branches/$pattern/protection"
+            fi
+          done
+          echo "--------------------------------------"
+        done
