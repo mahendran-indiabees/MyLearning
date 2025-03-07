@@ -107,6 +107,13 @@ jobs:
           EOF
           )
 
+
+echo "$RESPONSE" | jq -r '.data.repository.branchProtectionRules.nodes[] | .id + " " + .pattern' | while read -r ID PATTERN; do
+  echo "Deleting rule: $PATTERN (ID: $ID)"
+  gh api graphql -f query="mutation { deleteBranchProtectionRule(input: {id: \"$ID\"}) { clientMutationId } }"
+done
+          
+
           # Execute query and parse response
           RESPONSE=$(gh api graphql -f query="$QUERY")
           echo "$RESPONSE" | jq -r '.data.repository.branchProtectionRules.nodes[].pattern'
