@@ -60,3 +60,58 @@ jobs:
           done
           echo "--------------------------------------"
         done
+
+
+
+
+        name: List All Protected Branches
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Repository (owner/repo)"
+        required: true
+
+jobs:
+  list-protected-branches:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Setup GitHub CLI
+      run: gh auth login --with-token <<< "${{ secrets.GH_PAT }}"
+
+    - name: Fetch All Protected Branches
+      env:
+        REPO: "${{ github.event.inputs.repo }}"
+      run: |
+        OWNER=$(echo "$REPO" | cut -d'/' -f1)
+        REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
+        END_CURSOR="null"
+        HAS_NEXT_PAGE="true"
+
+        while [ "$HAS_NEXT_PAGE" = "true" ]; do
+          QUERY=$(cat <<EOF
+          {
+            repository(owner: "$OWNER", name: "$REPO_NAME") {
+              branchProtectionRules(first: 100, after: $END_CURSOR) {
+                totalCount
+                pageInfo {
+                  hasNextPage
+                  endCursor
+                }
+                nodes {
+                  pattern
+                }
+              }
+            }
+          }
+          EOF
+          )
+
+          # Execute query and parse response
+          RESPONSE=$(gh api graphql -f query="$QUERY")
+          echo "$RESPONSE" | jq -r '.data.repository.branchProtectionRules.nodes[].pattern'
+
+          # Update pagination variables
+          HAS_NEXT_PAGE=$(echo "$RESPONSE" | jq -r '.data.repository.branchProtectionRules.pageInfo.hasNextPage')
+          END_CURSOR=$(echo "$RESPONSE" | jq -r '.data.repository.branchProtectionRules.pageInfo.endCursor | tojson')
+        done
